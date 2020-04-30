@@ -1,0 +1,39 @@
+---
+# This task deploys with kubectl apply -f <filename>
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: hydrate-manifests
+spec:
+  params:
+    - name: pathToHydrate
+      description: Path to the manifest to hydrate
+    - name: pathToK8S
+      description: Path to the manifests
+    #    - name: yqArg
+    #      description: Okay this is a hack, but I didn't feel right hard-codeing `-d1` down below
+    - name: yamlPathToImage
+      description: The path to the image to replace in the yaml manifest (arg to yq)
+  resources:
+    inputs:
+      - name: source
+        type: git
+      - name: image
+        type: image
+    outputs:
+      - name: manifests-gcs
+        type: storage
+  steps:
+    - name: replace-image
+      image: mikefarah/yq
+      command: ['yq']
+      args:
+        - "w"
+        - "-i"
+        - "$(resources.inputs.source.path)/$(params.pathToK8S)/$(params.pathToHydrate)"
+        - "$(params.yamlPathToImage)"
+        - "$(resources.inputs.image.url)"
+    - name: copy-to-output
+      image: alpine
+      script: cp -r $(resources.inputs.source.path)/$(params.pathToK8S) $(resources.outputs.manifests-gcs.path)/
+---

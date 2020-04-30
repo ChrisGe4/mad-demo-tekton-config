@@ -1,0 +1,32 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: build-hydrate-deploy-run-dev
+spec:
+  pipelineRef:
+    name: demo-pipeline
+  resources:
+    - name: source-repo
+      resourceSpec:
+        type: git
+        params:
+          - name: url
+            value: https://github.com/chrisge4/mad-demo-tekton-http
+          - name: revision
+            value: master
+    - name: image
+      resourceSpec:
+        type: image
+        params:
+          - name: url
+            value: gcr.io/cloud-build-delivery-mad/http-server:dev
+    - name: manifests-gcs
+      resourceSpec:
+        type: storage
+        params:
+          - name: type
+            value: gcs
+          - name: location
+            value: gs://mad-tekton-demo/http
+          - name: dir
+            value: "y" # This can have any value to be considered "true"

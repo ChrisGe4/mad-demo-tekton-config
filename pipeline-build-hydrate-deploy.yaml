@@ -1,0 +1,77 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: demo-pipeline
+spec:
+  params:
+    - name: pathToContext
+      type: string
+      description: The path to the build context relative to your source repo's root. This is used by Kaniko.
+      default: .
+    - name: pathToDockerFile
+      type: string
+      description: The path to the dockerfile to build, relative to the context.
+      default: Dockerfile
+    - name: pathToK8S
+      description: Path to the manifest to apply
+      default: k8s
+    - name: pathToHydrate
+      description: Path to the manifest to hydrate
+      default: deployment.yaml
+    - name: yamlPathToImage
+      description: The path to the image to replace in the yaml manifest (arg to yq)
+      default: spec.template.spec.containers[0].image
+  resources:
+    - name: source-repo
+      type: git
+    - name: image
+      type: image
+    - name: manifests-gcs
+      type: storage
+  tasks:
+    - name: build-image
+      taskRef:
+        name: build-push
+      params:
+        - name: pathToDockerFile
+          value: $(params.pathToDockerFile)
+        - name: pathToContext
+          value: $(params.pathToContext)
+      resources:
+        inputs:
+          - name: source-repo
+            resource: source-repo
+        outputs:
+          - name: built-image
+            resource: image
+    - name: hydrate-manifests
+      runAfter: [build-image]
+      taskRef:
+        name: hydrate-manifests
+      params:
+        - name: yamlPathToImage
+          value: $(params.yamlPathToImage)
+        - name: pathToHydrate
+          value: $(params.pathToHydrate)
+        - name: pathToK8S
+          value: $(params.pathToK8S)
+      resources:
+        inputs:
+          - name: source
+            resource: source-repo
+          - name: image
+            resource: image
+        outputs:
+          - name: manifests-gcs
+            resource: manifests-gcs
+    - name: deploy-app
+      runAfter: [hydrate-manifests]
+      taskRef:
+        name: deploy-kubectl
+      resources:
+        inputs:
+          - name: source
+            resource: manifests-gcs
+      params:
+        - name: path
+          value: $(params.pathToK8S)
